@@ -18,15 +18,15 @@ df.drop(columns=['severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
 df["comment_text"] = df["comment_text"].str.lower()
 df["comment_text"] = df["comment_text"].str.replace("\xa0", " ", regex=False).str.split().str.join(" ")
 
-MAX_LEN = 512
-TRAIN_BATCH_SIZE = 32
-EPOCHS = 1
-LEARNING_RATE = 1e-05
-NUM_WORKERS = 2
+max = 512
+batch_size = 32
+epochs = 1
+LR = 1e-05
+workers = 2
 path = '/scratch/2780992k/WL_HC2.pth'
 
 #Custom class for pre-processing before text can be fed into DistilBERT
-class MultiLabelDataset(Dataset):
+class BinaryDataset(Dataset):
 
     def __init__(self, dataframe, tokenizer, max_len: int, eval_mode: bool = False):
         self.data = dataframe
@@ -102,7 +102,7 @@ QUERY_SIZE = 5000
 NUM_AL_ITERATIONS = 5
 
 tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased', truncation=True, do_lower_case=True)
-training_set = MultiLabelDataset(df, tokenizer, MAX_LEN)
+training_set = BinaryDataset(df, tokenizer, max)
 
 num_samples_subset_1 = 50000
 
@@ -112,8 +112,8 @@ training_subset_1_df.reset_index(drop=True, inplace=True)
 training_subset_rest_df = df.drop(training_subset_1_df.index)
 training_subset_rest_df.reset_index(drop=True, inplace=True)
 
-training_subset_1 = MultiLabelDataset(training_subset_1_df, tokenizer, MAX_LEN)
-training_subset_rest = MultiLabelDataset(training_subset_rest_df, tokenizer, MAX_LEN)
+training_subset_1 = BinaryDataset(training_subset_1_df, tokenizer, max)
+training_subset_rest = BinaryDataset(training_subset_rest_df, tokenizer, max)
 
 #A new dataframe to store the results
 columns = ['iteration', 'accuracy', 'precision', 'recall', 'f1', 'precision avg', 'recall avg', 'f1 avg']
@@ -122,14 +122,14 @@ WLHC_df = pd.DataFrame(columns=columns)
 
 # Create data loaders for each subset
 train_params_subset_1 = {
-    'batch_size': TRAIN_BATCH_SIZE,
+    'batch_size': batch_size,
     'shuffle': True,
-    'num_workers': NUM_WORKERS
+    'num_workers': workers
 }
 train_params_subset_rest = {
-    'batch_size': TRAIN_BATCH_SIZE,
+    'batch_size': batch_size,
     'shuffle': False,
-    'num_workers': NUM_WORKERS
+    'num_workers': workers
 }
 
 cou = 0
@@ -182,7 +182,7 @@ def loss_fn(outputs, targets):
 #initialising the model
 model = DistilBERTClass()
 model.to(device)
-optimizer = torch.optim.Adam(params = model.parameters(), lr=LEARNING_RATE)
+optimizer = torch.optim.Adam(params = model.parameters(), lr=LR)
 
 all_test_pred = []
 
@@ -207,11 +207,11 @@ for iteration in range(5):
 
     model = DistilBERTClass()
     model.to(device)
-    optimizer = torch.optim.Adam(params=model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=LR)
 
     print(f"Active Learning Iteration {iteration + 1}")
 
-    for epoch in range(EPOCHS):
+    for epoch in range(epochs):
         train(epoch, training_loader_subset_1)
 
     all_test_pred = test(model, training_loader_subset_rest)
@@ -302,7 +302,7 @@ for iteration in range(5):
     training_loader_subset_rest = DataLoader(training_subset_rest, **train_params_subset_rest)
 
 #final finetuning
-for epoch in range(EPOCHS):
+for epoch in range(epochs):
     train(epoch, training_loader_subset_1)
 
 
@@ -319,8 +319,8 @@ indices_to_keep = df_label.index.tolist()
 df_test = df_test.iloc[indices_to_keep]
 df_test['toxic'] = df_label['Toxic']
 
-test_set = MultiLabelDataset(df_test, tokenizer, MAX_LEN, eval_mode = True)
-testing_params = {'batch_size': TRAIN_BATCH_SIZE,
+test_set = BinaryDataset(df_test, tokenizer, max, eval_mode = True)
+testing_params = {'batch_size': batch_size,
                'shuffle': False,
                'num_workers': 2
                 }
